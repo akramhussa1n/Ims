@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Management System</title>
+    <style>
+        /* Basic Reset */
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        
+        body { background: #f5f5f5; padding: 20px; }
+        
+        /* Tab Styles */
+        .tabs { display: flex; background: #fff; border-radius: 5px 5px 0 0; overflow: hidden; }
+        .tab-btn { 
+            padding: 12px 20px; 
+            background: #e0e0e0; 
+            border: none; 
+            cursor: pointer; 
+            flex: 1; 
+            text-align: center;
+            transition: all 0.3s;
+        }
+        .tab-btn:hover { background: #d0d0d0; }
+        .tab-btn.active { background: #4285f4; color: white; }
+        
+        /* Content Styles */
+        .tab-content { 
+            display: none; 
+            padding: 20px; 
+            background: white; 
+            border-radius: 0 0 5px 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .tab-content.active { display: block; }
+        
+        /* Form Styles */
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select, textarea { 
+            width: 100%; 
+            padding: 10px; 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+        }
+        button { 
+            background: #4285f4; 
+            color: white; 
+            border: none; 
+            padding: 10px 15px; 
+            border-radius: 4px; 
+            cursor: pointer; 
+        }
+        
+        /* Order Items */
+        .order-item {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+        .remove-item { background: #f44336; }
+    </style>
+</head>
+<body>
+    <h1>Inventory Management System</h1>
+    
+    <div class="tabs">
+        <button class="tab-btn active" data-tab="add-product">Add Product</button>
+        <button class="tab-btn" data-tab="purchase-order">Purchase Order</button>
+        <button class="tab-btn" data-tab="sale-order">Sale Order</button>
+        <button class="tab-btn" data-tab="reports">Reports</button>
+    </div>
+    
+    <!-- Add Product Tab -->
+    <div id="add-product" class="tab-content active">
+        <h2>Add New Product</h2>
+        <form id="product-form">
+            <div class="form-group">
+                <label>Product Name</label>
+                <input type="text" id="product-name" required>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="product-description"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Purchase Price</label>
+                <input type="number" id="purchase-price" step="0.01" required>
+            </div>
+            <div class="form-group">
+                <label>Sale Price</label>
+                <input type="number" id="sale-price" step="0.01" required>
+            </div>
+            <div class="form-group">
+                <label>Initial Quantity</label>
+                <input type="number" id="initial-quantity" value="0" required>
+            </div>
+            <button type="submit">Add Product</button>
+        </form>
+    </div>
+    
+    <!-- Purchase Order Tab -->
+    <div id="purchase-order" class="tab-content">
+        <h2>Create Purchase Order</h2>
+        <form id="purchase-form">
+            <div id="po-items">
+                <div class="order-item">
+                    <select class="po-product" required>
+                        <option value="">Select Product</option>
+                    </select>
+                    <input type="number" class="po-qty" placeholder="Qty" min="1" required>
+                    <input type="text" class="po-price" placeholder="Price" readonly>
+                    <button type="button" class="remove-item">×</button>
+                </div>
+            </div>
+            <button type="button" id="add-po-item">Add Item</button>
+            <div>
+                <strong>Total: </strong><span id="po-total">0.00</span>
+            </div>
+            <button type="submit">Submit Order</button>
+        </form>
+    </div>
+    
+    <!-- Sale Order Tab -->
+    <div id="sale-order" class="tab-content">
+        <h2>Create Sale Order</h2>
+        <form id="sale-form">
+            <div class="form-group">
+                <label>Customer Name</label>
+                <input type="text" id="customer-name" required>
+            </div>
+            <div id="so-items">
+                <div class="order-item">
+                    <select class="so-product" required>
+                        <option value="">Select Product</option>
+                    </select>
+                    <input type="number" class="so-qty" placeholder="Qty" min="1" required>
+                    <input type="text" class="so-price" placeholder="Price" readonly>
+                    <input type="text" class="so-stock" placeholder="In Stock" readonly>
+                    <button type="button" class="remove-item">×</button>
+                </div>
+            </div>
+            <button type="button" id="add-so-item">Add Item</button>
+            <div>
+                <strong>Total: </strong><span id="so-total">0.00</span>
+            </div>
+            <button type="submit">Submit Order</button>
+        </form>
+    </div>
+    
+    <!-- Reports Tab -->
+    <div id="reports" class="tab-content">
+        <h2>Reports</h2>
+        <div>
+            <h3>Purchase History</h3>
+            <div id="purchase-report"></div>
+        </div>
+        <div>
+            <h3>Sales History</h3>
+            <div id="sales-report"></div>
+        </div>
+    </div>
+
+    <script>
+        // Simple data storage
+        let products = JSON.parse(localStorage.getItem('products')) || [];
+        let purchaseOrders = JSON.parse(localStorage.getItem('purchaseOrders')) || [];
+        let saleOrders = JSON.parse(localStorage.getItem('saleOrders')) || [];
+        
+        // Tab switching
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Remove active class from all tabs
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                // Add active class to clicked tab
+                const tabId = btn.getAttribute('data-tab');
+                btn.classList.add('active');
+                document.getElementById(tabId).classList.add('active');
+                
+                // Refresh data if needed
+                if (tabId === 'purchase-order') {
+                    loadProductsForPO();
+                } else if (tabId === 'sale-order') {
+                    loadProductsForSO();
+                } else if (tabId === 'reports') {
+                    loadPurchaseReport();
+                    loadSalesReport();
+                }
+            });
+        });
+        
+        // Add Product Form
+        document.getElementById('product-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const newProduct = {
+                id: Date.now().toString(),
+                name: document.getElementById('product-name').value,
+                description: document.getElementById('product-description').value,
+                purchasePrice: parseFloat(document.getElementById('purchase-price').value),
+                salePrice: parseFloat(document.getElementById('sale-price').value),
+                quantity: parseInt(document.getElementById('initial-quantity').value)
+            };
+            
+            products.push(newProduct);
+            localStorage.setItem('products', JSON.stringify(products));
+            
+            alert('Product added successfully!');
+            this.reset();
+        });
+        
+        // Load products for purchase order
+        function loadProductsForPO() {
+            const selects = document.querySelectorAll('.po-product');
+            selects.forEach(select => {
+                select.innerHTML = '<option value="">Select Product</option>';
+                products.forEach(product => {
+                    const option = document.createElement('option');
+                    option.value = product.id;
+                    option.textContent = product.name;
+                    option.dataset.price = product.purchasePrice;
+                    select.appendChild(option);
+                });
+            });
+        }
+        
+        // Load products for sale order
+        function loadProductsForSO() {
+            const selects = document.querySelectorAll('.so-product');
+            selects.forEach(select => {
+                select.innerHTML = '<option value="">Select Product</option>';
+                products.forEach(product => {
+                    const option = document.createElement('option');
+                    option.value = product.id;
+                    option.textContent = product.name;
+                    option.dataset.price = product.salePrice;
+                    option.dataset.quantity = product.quantity;
+                    select.appendChild(option);
+                });
+            });
+        }
+        
+        // Add PO item
+        document.getElementById('add-po-item').addEventListener('click', function() {
+            const container = document.getElementById('po-items');
+            const newItem = document.createElement('div');
+            newItem.className = 'order-item';
+            newItem.innerHTML = `
+                <select class="po-product" required>
+                    <option value="">Select Product</option>
+                </select>
+                <input type="number" class="po-qty" placeholder="Qty" min="1" required>
+                <input type="text" class="po-price" placeholder="Price" readonly>
+                <button type="button" class="remove-item">×</button>
+            `;
+            container.appendChild(newItem);
+            loadProductsForPO();
+            
+            // Add event listeners to new item
+            newItem.querySelector('.po-product').addEventListener('change', updatePOPrice);
+            newItem.querySelector('.po-qty').addEventListener('input', calculatePOTotal);
+            newItem.querySelector('.remove-item').addEventListener('click', function() {
+                container.removeChild(newItem);
+                calculatePOTotal();
+            });
+        });
+        
+        // Add SO item
+        document.getElementById('add-so-item').addEventListener('click', function() {
+            const container = document.getElementById('so-items');
+            const newItem = document.createElement('div');
+            newItem.className = 'order-item';
+            newItem.innerHTML = `
+                <select class="so-product" required>
+                    <option value="">Select Product</option>
+                </select>
+                <input type="number" class="so-qty" placeholder="Qty" min="1" required>
+                <input type="text" class="so-price" placeholder="Price" readonly>
+                <input type="text" class="so-stock" placeholder="In Stock" readonly>
+                <button type="button" class="remove-item">×</button>
+            `;
+            container.appendChild(newItem);
+            loadProductsForSO();
+            
+            // Add event listeners to new item
+            const productSelect = newItem.querySelector('.so-product');
+            productSelect.addEventListener('change', function() {
+                updateSOPrice(this);
+                updateSOStock(this);
+            });
+            newItem.querySelector('.so-qty').addEventListener('input', calculateSOTotal);
+            newItem.querySelector('.remove-item').addEventListener('click', function() {
+                container.removeChild(newItem);
+                calculateSOTotal();
+            });
+        });
+        
+        // Update price when product selected (PO)
+        function updatePOPrice(e) {
+            const select = e.target;
+            const priceField = select.closest('.order-item').querySelector('.po-price');
+            if (select.value) {
+                const selectedOption = select.options[select.selectedIndex];
+                priceField.value = selectedOption.dataset.price;
+            } else {
+                priceField.value = '';
+            }
+            calculatePOTotal();
+        }
+        
+        // Update price when product selected (SO)
+        function updateSOPrice(select) {
+            const priceField = select.closest('.order-item').querySelector('.so-price');
+            if (select.value) {
+                const selectedOption = select.options[select.selectedIndex];
+                priceField.value = selectedOption.dataset.price;
+            } else {
+                priceField.value = '';
+            }
+            calculateSOTotal();
+        }
+        
+        // Update stock display when product selected (SO)
+        function updateSOStock(select) {
+            const stockField = select.closest('.order-item').querySelector('.so-stock');
+            if (select.value) {
+                const selectedOption = select.options[select.selectedIndex];
+                stockField.value = selectedOption.dataset.quantity;
+            } else {
+                stockField.value = '';
+            }
+        }
+        
+        // Calculate PO total
+        function calculatePOTotal() {
+            let total = 0;
+            document.querySelectorAll('#po-items .order-item').forEach(item => {
+                const price = parseFloat(item.querySelector('.po-price').value) || 0;
+                const qty = parseFloat(item.querySelector('.po-qty').value) || 0;
+                total += price * qty;
+            });
+            document.getElementById('po-total').textContent = total.toFixed(2);
+        }
+        
+        // Calculate SO total
+        function calculateSOTotal() {
+            let total = 0;
+            document.querySelectorAll('#so-items .order-item').forEach(item => {
+                const price = parseFloat(item.querySelector('.so-price').value) || 0;
+                const qty = parseFloat(item.querySelector('.so-qty').value) || 0;
+                total += price * qty;
+            });
+            document.getElementById('so-total').textContent = total.toFixed(2);
+        }
+        
+        // Submit PO
+        document.getElementById('purchase-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const items = [];
+            let isValid = true;
+            
+            document.querySelectorAll('#po-items .order-item').forEach(item => {
+                const productId = item.querySelector('.po-product').value;
+                const qty = item.querySelector('.po-qty').value;
+                
+                if (!productId || !qty) {
+                    isValid = false;
+                    return;
+                }
+                
+                const product = products.find(p => p.id === productId);
+                
+                items.push({
+                    productId,
+                    productName: product.name,
+                    qty: parseInt(qty),
+                    price: parseFloat(item.querySelector('.po-price').value)
+                });
+            });
+            
+            if (!isValid || items.length === 0) {
+                alert('Please fill all item fields');
+                return;
+            }
+            
+            const newPO = {
+                id: Date.now().toString(),
+                date: new Date().toISOString(),
+                items,
+                total: parseFloat(document.getElementById('po-total').textContent)
+            };
+            
+            // Update product quantities
+            items.forEach(item => {
+                const product = products.find(p => p.id === item.productId);
+                if (product) {
+                    product.quantity += item.qty;
+                }
+            });
+            
+            purchaseOrders.push(newPO);
+            localStorage.setItem('purchaseOrders', JSON.stringify(purchaseOrders));
+            localStorage.setItem('products', JSON.stringify(products));
+            
+            alert('Purchase order submitted!');
+            this.reset();
+            document.getElementById('po-items').innerHTML = `
+                <div class="order-item">
+                    <select class="po-product" required>
+                        <option value="">Select Product</option>
+                    </select>
+                    <input type="number" class="po-qty" placeholder="Qty" min="1" required>
+                    <input type="text" class="po-price" placeholder="Price" readonly>
+                    <button type="button" class="remove-item">×</button>
+                </div>
+            `;
+            document.getElementById('po-total').textContent = '0.00';
+            loadProductsForPO();
+            loadProductsForSO(); // Refresh SO product list with updated quantities
+        });
+        
+        // Submit SO
+        document.getElementById('sale-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const customerName = document.getElementById('customer-name').value;
+            if (!customerName) {
+                alert('Please enter customer name');
+                return;
+            }
+            
+            const items = [];
+            let isValid = true;
+            let hasStockError = false;
+            
+            document.querySelectorAll('#so-items .order-item').forEach(item => {
+                const productId = item.querySelector('.so-product').value;
+                const qty = parseInt(item.querySelector('.so-qty').value);
+                const stock = parseInt(item.querySelector('.so-stock').value);
+                
+                if (!productId || !qty) {
+                    isValid = false;
+                    return;
+                }
+                
+                if (qty > stock) {
+                    hasStockError = true;
+                    const product = products.find(p => p.id === productId);
+                    alert(`Not enough stock for ${product.name}. Available: ${stock}`);
+                    return;
+                }
+                
+                const product = products.find(p => p.id === productId);
+                
+                items.push({
+                    productId,
+                    productName: product.name,
+                    qty: qty,
+                    price: parseFloat(item.querySelector('.so-price').value)
+                });
+            });
+            
+            if (!isValid || items.length === 0) {
+                alert('Please fill all item fields');
+                return;
+            }
+            
+            if (hasStockError) {
+                return;
+            }
+            
+            const newSO = {
+                id: Date.now().toString(),
+                date: new Date().toISOString(),
+                customerName,
+                items,
+                total: parseFloat(document.getElementById('so-total').textContent)
+            };
+            
+            // Update product quantities
+            items.forEach(item => {
+                const product = products.find(p => p.id === item.productId);
+                if (product) {
+                    product.quantity -= item.qty;
+                }
+            });
+            
+            saleOrders.push(newSO);
+            localStorage.setItem('saleOrders', JSON.stringify(saleOrders));
+            localStorage.setItem('products', JSON.stringify(products));
+            
+            alert('Sale order submitted!');
+            this.reset();
+            document.getElementById('so-items').innerHTML = `
+                <div class="order-item">
+                    <select class="so-product" required>
+                        <option value="">Select Product</option>
+                    </select>
+                    <input type="number" class="so-qty" placeholder="Qty" min="1" required>
+                    <input type="text" class="so-price" placeholder="Price" readonly>
+                    <input type="text" class="so-stock" placeholder="In Stock" readonly>
+                    <button type="button" class="remove-item">×</button>
+                </div>
+            `;
+            document.getElementById('so-total').textContent = '0.00';
+            loadProductsForSO();
+        });
+        
+        // Load purchase report
+        function loadPurchaseReport() {
+            const container = document.getElementById('purchase-report');
+            container.innerHTML = '';
+            
+            if (purchaseOrders.length === 0) {
+                container.innerHTML = '<p>No purchase orders found</p>';
+                return;
+            }
+            
+            purchaseOrders.forEach(order => {
+                const orderDiv = document.createElement('div');
+                orderDiv.style.marginBottom = '20px';
+                orderDiv.style.padding = '10px';
+                orderDiv.style.backgroundColor = '#f0f0f0';
+                
+                let itemsHtml = '';
+                order.items.forEach(item => {
+                    itemsHtml += `
+                        <div style="margin-left: 20px;">
+                            ${item.productName} - 
+                            ${item.qty} × ${item.price.toFixed(2)} = 
+                            ${(item.qty * item.price).toFixed(2)}
+                        </div>
+                    `;
+                });
+                
+                orderDiv.innerHTML = `
+                    <div><strong>Order #${order.id}</strong></div>
+                    <div>Date: ${new Date(order.date).toLocaleDateString()}</div>
+                    ${itemsHtml}
+                    <div style="font-weight: bold;">Total: ${order.total.toFixed(2)}</div>
+                `;
+                
+                container.appendChild(orderDiv);
+            });
+        }
+        
+        // Load sales report
+        function loadSalesReport() {
+            const container = document.getElementById('sales-report');
+            container.innerHTML = '';
+            
+            if (saleOrders.length === 0) {
+                container.innerHTML = '<p>No sale orders found</p>';
+                return;
+            }
+            
+            saleOrders.forEach(order => {
+                const orderDiv = document.createElement('div');
+                orderDiv.style.marginBottom = '20px';
+                orderDiv.style.padding = '10px';
+                orderDiv.style.backgroundColor = '#f0f0f0';
+                
+                let itemsHtml = '';
+                order.items.forEach(item => {
+                    itemsHtml += `
+                        <div style="margin-left: 20px;">
+                            ${item.productName} - 
+                            ${item.qty} × ${item.price.toFixed(2)} = 
+                            ${(item.qty * item.price).toFixed(2)}
+                        </div>
+                    `;
+                });
+                
+                orderDiv.innerHTML = `
+                    <div><strong>Order #${order.id}</strong></div>
+                    <div>Date: ${new Date(order.date).toLocaleDateString()}</div>
+                    <div>Customer: ${order.customerName}</div>
+                    ${itemsHtml}
+                    <div style="font-weight: bold;">Total: ${order.total.toFixed(2)}</div>
+                `;
+                
+                container.appendChild(orderDiv);
+            });
+        }
+        
+        // Initialize
+        loadProductsForPO();
+        loadProductsForSO();
+        
+        // Set up event listeners for initial PO items
+        document.querySelectorAll('.po-product').forEach(select => {
+            select.addEventListener('change', function(e) {
+                updatePOPrice(e);
+            });
+        });
+        document.querySelectorAll('.po-qty').forEach(input => {
+            input.addEventListener('input', calculatePOTotal);
+        });
+        
+        // Set up event listeners for initial SO items
+        document.querySelectorAll('.so-product').forEach(select => {
+            select.addEventListener('change', function() {
+                updateSOPrice(this);
+                updateSOStock(this);
+            });
+        });
+        document.querySelectorAll('.so-qty').forEach(input => {
+            input.addEventListener('input', calculateSOTotal);
+        });
+    </script>
+</body>
+</html>
